@@ -72,6 +72,14 @@ export class ChatService {
     return {
       ...message,
       content: createMessageDto.content,
+      sender: {
+        ...message.sender,
+        photos: message.sender.photos.map((p) => p.url),
+      },
+      receiver: {
+        ...message.receiver,
+        photos: message.receiver.photos.map((p) => p.url),
+      },
     };
   }
 
@@ -103,10 +111,28 @@ export class ChatService {
         return {
           ...msg,
           content: this.encryptionService.decrypt(msg.content),
+          sender: {
+            ...msg.sender,
+            photos: msg.sender.photos.map((p) => p.url),
+          },
+          receiver: {
+            ...msg.receiver,
+            photos: msg.receiver.photos.map((p) => p.url),
+          },
         };
       } catch {
         // Handle legacy unencrypted messages if any (during dev)
-        return msg;
+        return {
+          ...msg,
+          sender: {
+            ...msg.sender,
+            photos: msg.sender.photos.map((p) => p.url),
+          },
+          receiver: {
+            ...msg.receiver,
+            photos: msg.receiver.photos.map((p) => p.url),
+          },
+        };
       }
     });
   }
@@ -119,20 +145,32 @@ export class ChatService {
       },
       orderBy: { createdAt: "desc" },
       include: {
-        sender: { select: { id: true, firstName: true, email: true } },
-        receiver: { select: { id: true, firstName: true, email: true } },
+        sender: { select: { id: true, firstName: true, email: true, photos: true, avatarUrl: true } },
+        receiver: { select: { id: true, firstName: true, email: true, photos: true, avatarUrl: true } },
       },
     });
 
     return messages.map((msg) => {
-      try {
-        return {
-          ...msg,
-          content: this.encryptionService.decrypt(msg.content),
-        };
-      } catch {
-        return msg;
-      }
+      const decryptedContent = (() => {
+        try {
+          return this.encryptionService.decrypt(msg.content);
+        } catch {
+          return msg.content;
+        }
+      })();
+
+      return {
+        ...msg,
+        content: decryptedContent,
+        sender: {
+          ...msg.sender,
+          photos: msg.sender.photos ? msg.sender.photos.map((p) => p.url) : [],
+        },
+        receiver: {
+          ...msg.receiver,
+          photos: msg.receiver.photos ? msg.receiver.photos.map((p) => p.url) : [],
+        },
+      };
     });
   }
 }

@@ -26,7 +26,11 @@ export class InAppNotificationsController {
   @Get()
   @ApiOperation({ summary: "List current user's notifications" })
   async list(@Request() req: RequestWithUser): Promise<UserNotificationDto[]> {
-    return this.service.listForUser(req.user.userId);
+    const list = await this.service.listForUser(req.user.userId);
+    return list.map((item) => ({
+      ...item,
+      detailsJson: item.detailsJson ? JSON.stringify(item.detailsJson) : null,
+    }));
   }
 
   @Get(":id")
@@ -35,7 +39,11 @@ export class InAppNotificationsController {
     @Request() req: RequestWithUser,
     @Param("id", ParseIntPipe) id: number,
   ): Promise<UserNotificationDto> {
-    return this.service.getForUser(req.user.userId, id);
+    const item = await this.service.getForUser(req.user.userId, id);
+    return {
+      ...item,
+      detailsJson: item.detailsJson ? JSON.stringify(item.detailsJson) : null,
+    };
   }
 
   @Post()
@@ -44,7 +52,11 @@ export class InAppNotificationsController {
     @Request() req: RequestWithUser,
     @Body() dto: CreateInAppNotificationDto,
   ): Promise<UserNotificationDto> {
-    return this.service.createForUser(req.user.userId, dto);
+    const item = await this.service.createForUser(req.user.userId, dto);
+    return {
+      ...item,
+      detailsJson: item.detailsJson ? JSON.stringify(item.detailsJson) : null,
+    };
   }
 
   @Delete()

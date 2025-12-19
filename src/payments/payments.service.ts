@@ -56,12 +56,13 @@ export class PaymentsService {
 
     const payment = await this.prisma.payment.create({
       data: {
-        userId: user.id,
+        user: { connect: { id: user.id } },
         amount: createPaymentDto.amount,
         currency: createPaymentDto.currency || "USD",
         status: PaymentStatus.PENDING,
         provider: createPaymentDto.provider as PaymentProvider,
-        tier: createPaymentDto.tier,
+        productType: "SUBSCRIPTION",
+        tier: createPaymentDto.tier ? (createPaymentDto.tier as any) : undefined,
       },
     });
 
@@ -111,7 +112,7 @@ export class PaymentsService {
         await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            subscriptionTier: createPaymentDto.tier,
+            subscriptionTier: createPaymentDto.tier as any,
             subscriptionStartedAt: now,
             subscriptionExpiresAt: expiresAt,
           },
@@ -193,9 +194,19 @@ export class PaymentsService {
     const paymentId = Number(id);
     await this.findOne(paymentId);
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tier, provider, ...rest } = updatePaymentDto;
+
+    // Explicitly handle tier casting if present
+    const data: Prisma.PaymentUpdateInput = {
+        ...rest,
+        ...(tier ? { tier: tier as any } : {}),
+        ...(provider ? { provider: provider as PaymentProvider } : {})
+    };
+
     return this.prisma.payment.update({
       where: { id: paymentId },
-      data: updatePaymentDto as Prisma.PaymentUpdateInput,
+      data,
     });
   }
 

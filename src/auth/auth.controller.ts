@@ -69,7 +69,20 @@ export class AuthController {
         email: user.email,
         password: createUserDto.password,
       });
-      return { ...user, accessToken: loginResult.accessToken };
+      return {
+        ...user,
+        accessToken: loginResult.accessToken,
+        videos: [],
+        interests: user.interests ? user.interests.map((i) => i.name) : [],
+        photos: user.photos ? user.photos.map((p) => p.url) : [],
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+        birthDate: user.birthDate.toISOString(),
+        subscriptionExpiresAt: user.subscriptionExpiresAt
+          ? user.subscriptionExpiresAt.toISOString()
+          : null,
+      } as unknown as AuthRegisterResponseDto;
     } catch (error: unknown) {
       console.error("Register error in controller:", error);
 
