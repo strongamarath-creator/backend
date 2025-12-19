@@ -1,0 +1,491 @@
+datasource db {
+  provider = "postgresql"
+  extensions = [postgis] // Включаем расширение PostGIS
+}
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"] // Полезно для поиска и Geo
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  GOOGLE_PAY
+  HUAWEI_PAY
+  APPLE_PAY
+  VK_PAY
+  YANDEX_PAY
+  T_BANK
+  SBP
+  TEST
+}
+
+enum SubscriptionTier {
+  FREE
+  SILVER  //TIER1
+  GOLD  //TIER2
+  PLATINUM  //TIER3
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum SwipeType {
+  LIKE
+  DISLIKE
+  SUPERLIKE
+  LOVE
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  CALL_LOG
+  GIFT
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  HUAWEI
+  WEB
+}
+
+enum ConfigType {
+  STRING
+  BOOLEAN
+  NUMBER
+  JSON
+  ARRAY
+}
+
+enum LookingFor {
+  RELATIONSHIP
+  CASUAL
+  CHAT
+}
+
+model User {
+  id          Int    @id @default(autoincrement())
+  email       String    @unique
+  emailVerified DateTime? @map("email_verified")
+  phoneNumber   String?   @unique @map("phone_number")
+  phoneVerified DateTime? @map("phone_verified")
+  password    String?
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  socialLogins  SocialLogin[]
+  
+  image       String?
+  firstName   String?   @map("first_name")
+  lastName    String?   @map("last_name")
+  patronymic  String?   @map("patronymic") // Отчество для сверки
+  birthDate   DateTime
+  gender      Gender
+  nationality String?
+  language    String    @default("ru") // "en", "ru", etc.
+  
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  lastLoginAt DateTime?
+  lastActiveAt  DateTime? // Для статуса "Online"
+  accounts    Account[]
+  sessions    Session[]
+
+  // Extended Profile
+  bio              String?
+  photos           UserPhoto[]
+  media            UserMedia[]
+  avatarUrl        String?  // Основное фото (кеш)
+
+  interests       Interest[] // Many-to-Many
+  
+  height           Int?      // in cm
+  education        String?
+  jobTitle         String?
+  company          String?
+  smoking          String?   // YES, NO, SOMETIMES
+  drinking         String?   // YES, NO, SOCIALLY
+  zodiac           String?
+  
+  lookingFor       LookingFor[]   // RELATIONSHIP, CASUAL, CHAT
+  genderPreference Gender   // MALE, FEMALE
+
+  // Permissions & Limits
+  role             String    @default("USER") // USER, ADMIN, MODERATOR
+  isBanned         Boolean   @default(false)
+  messagingBlocked Boolean @default(false)
+  callEnabled      Boolean @default(false)
+
+  // --- Geo & Search ---
+  // Реальные координаты устройства
+  latitude      Float?
+  longitude     Float?
+  
+// Search Preferences (Настройки поиска)
+  searchRadius   Int     @default(50) // В километрах, значение ползунка
+  isGlobalSearch Boolean @default(false) // Функция "Загранпаспорт" (искать везде)
+  ageMinPreference Int   @default(1)
+  ageMaxPreference Int   @default(99)
+
+  // Для Passport Mode (виртуальная локация)
+  isPassportActive Boolean @default(false)
+  passportLat      Float?
+  passportLon      Float?
+  
+  // Гео-индекс в отдельной таблице для PostGIS
+  location      UserLocation? 
+
+ // Subscription (Monetization)
+  subscriptionTier      SubscriptionTier @default(FREE) // FREE, TIER1, TIER2, TIER3 (legacy: SILVER/GOLD/PLATINUM)
+  subscriptionStartedAt DateTime?
+  subscriptionExpiresAt DateTime?
+
+  // Devices (Push Notifications)
+  devices       Device[]
+
+  // Relations
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  
+  initiatedMatches Match[] @relation("InitiatedMatches")
+  receivedMatches  Match[] @relation("ReceivedMatches")
+  
+  swipes        Swipe[]
+
+  reportsFiled  Report[] @relation("Reporter")
+  reportsReceived Report[] @relation("ReportedUser")
+  
+  payments      Payment[]
+
+  userNotifications UserNotification[]
+
+// Admin Logs
+  adminScriptRuns   AdminScriptRun[]
+
+  @@map("users")
+  @@index([lastName, firstName, patronymic])
+  @@index([latitude, longitude]) 
+  @@index([gender, birthDate])
+}
+
+model Account {
+  id                 Int    @id @default(autoincrement())
+  userId             Int    @map("user_id")
+  type               String
+  provider           String
+  providerAccountId  String  @map("provider_account_id")
+  
+  // Токены (стандарт OAuth)
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  // КАСТОМНОЕ ПОЛЕ: Ссылка на профиль в соцсети
+  // Реализует требование: "со ссылкой на учетную запись под которой была осуществлена авторизация"
+  providerProfileUrl String? @map("provider_profile_url") 
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Уникальность пары провайдер + ID внутри провайдера
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model SocialLogin {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  provider    String   // APPLE, GOOGLE, FACEBOOK
+  providerId  String   // Unique ID from provider
+  email       String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+}
+
+model Device {
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  token       String         @unique // FCM or APNS Token
+  platform    DevicePlatform
+  lastUsedAt  DateTime       @default(now())
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Interest {
+  id      Int    @id @default(autoincrement())
+  name    String @unique // "Travel", "Music", "Gym"
+  iconUrl String? // Иконка для UI
+  
+  users   User[]
+}
+
+model Session {
+  id           Int   @id @default(autoincrement())
+  sessionToken String   @unique @map("session_token")
+  userId       Int   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Отдельная таблица для PostGIS (гео-поиск)
+model UserLocation {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  updatedAt DateTime @updatedAt
+
+  // Поле Unsupported требует ручной миграции SQL
+  coords Unsupported("geography(Point, 4326)")?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([coords], name: "location_idx", type: Gist)
+}
+
+model UserMedia {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  type             MediaType @default(VIDEO)
+  url              String
+  thumbnailUrl     String?
+  blurHash         String?  // Critical for Mobile UX (placeholder loading)
+  
+  order            Int      @default(0)
+  isAvatar         Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  
+  // Privacy & Safety
+  visibility       String   @default("PUBLIC") 
+  moderationStatus String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  swipesTargeted   Swipe[]  @relation("SwipeTargetMedia")
+
+  @@index([userId, order])
+}
+
+model UserPhoto {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  url              String
+  order            Int      @default(0)
+  isAvatar         Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  visibility       String   @default("PUBLIC") // PUBLIC | PRIVATE
+  moderationStatus String   @default("APPROVED") // PENDING | APPROVED | REJECTED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  swipesTargeted   Swipe[]  @relation("SwipeTargetPhoto")
+
+  @@unique([userId, url])
+  @@index([userId, isActive, createdAt])
+}
+
+model UserNotification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  type        String   // "MATCH", "MESSAGE", "SYSTEM", "PROMO"
+  title       String?
+  message     String
+  isRead      Boolean  @default(false)
+  variant     String   @default("info") // success | error | info
+  detailsJson Json?
+  data        Json?    // Deeplink data: { matchId: 1, url: "..." }
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AdminScriptRun {
+  id          Int      @id @default(autoincrement())
+  scriptId    String
+  safety      String
+  kind        String   // RUN | PREFLIGHT
+  status      String   // OK | ERROR
+
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  durationMs  Int?
+
+  payloadJson Json?
+  resultJson  Json?
+  error       String?
+
+  actorUserId Int?
+  actorEmail  String?
+  actor       User?    @relation(fields: [actorUserId], references: [id])
+
+  @@index([scriptId, startedAt])
+  @@index([actorUserId, startedAt])
+}
+
+model Match {
+  id        Int   @id @default(autoincrement())
+  user1Id   Int
+  user2Id   Int
+
+  isUnmatched Boolean   @default(false)
+  unmatchedAt DateTime?
+  unmatchedBy Int?      // ID of user who unmatched
+
+  createdAt DateTime @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user1     User     @relation("InitiatedMatches", fields: [user1Id], references: [id])
+  user2     User     @relation("ReceivedMatches", fields: [user2Id], references: [id])
+
+  messages  Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id, isUnmatched])
+  @@index([user2Id, isUnmatched])
+}
+
+model Message {
+  id        Int   @id @default(autoincrement())
+  content   String
+  senderId  Int
+  receiverId Int
+  matchId   Int
+  createdAt DateTime @default(now())
+  type      MessageType    @default(TEXT)
+  metadata  Json?
+
+  // Statuses
+  sentAt      DateTime    @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, sentAt, createdAt]) //Индекс для быстрой загрузки истории чата
+}
+
+model Swipe {
+  id        Int   @id @default(autoincrement())
+  fromUserId Int
+  toUserId   Int
+  isLike    Boolean
+  createdAt DateTime @default(now())
+
+  // Extended Swipe Info
+  type           SwipeType   @default(LIKE) // LIKE, DISLIKE, SUPERLIKE
+  context        String?  // profile, feed, recommended
+  targetPhotoUrl String?  // Which photo was liked
+
+  targetPhotoId  Int?
+  targetPhoto    UserPhoto? @relation("SwipeTargetPhoto", fields: [targetPhotoId], references: [id], onDelete: SetNull)
+
+  targetMediaId  Int?
+  targetMedia    UserMedia? @relation("SwipeTargetMedia", fields: [targetMediaId], references: [id], onDelete: SetNull)
+
+
+  fromUser    User     @relation(fields: [fromUserId], references: [id])
+  @@unique([fromUserId, toUserId])
+}
+
+model Report {
+  id          Int   @id @default(autoincrement())
+  reporterId  Int
+  reportedUserId  Int
+  reason      String
+  description String?
+  status      ReportStatus   @default(PENDING) // PENDING, RESOLVED, DISMISSED
+  
+  adminNotes      String?
+  resolvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUser    User     @relation("ReportedUser", fields: [reportedUserId], references: [id])
+}
+
+model Payment {
+  id        Int   @id @default(autoincrement())
+  userId    Int
+  amount    Float
+  currency  String
+  status    PaymentStatus
+  provider  PaymentProvider
+  transactionId String?  @unique // Stripe/Apple ID
+  receiptData   String?         // For Apple/Google verification
+  productType   String          // "SUBSCRIPTION", "BOOST", "SUPERLIKES"
+  tier      SubscriptionTier?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model SystemConfig {
+  id        Int   @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  description String?
+  type      ConfigType
+  isPublic  Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PageConfig {
+  id          Int   @id @default(autoincrement())
+  route       String   @unique // e.g. "/", "/about", "/login"
+  title       String
+  description String?
+  keywords    String?
+  content     String?  // HTML or Markdown content
+  isEnabled   Boolean  @default(true)
+  metaJson    Json?  // JSON string for extra meta tags (OG, Twitter)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

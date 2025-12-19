@@ -1,0 +1,7 @@
+SQL Миграция (Ручная правка)
+Prisma не создаст колонку geography сама. После запуска npx prisma migrate dev --create-only нужно зайти в папку prisma/migrations/..._migration_name/migration.sql и добавить:
+
+CREATE EXTENSION IF NOT EXISTS postgis;
+-- Убеждаемся, что колонка имеет правильный тип
+ALTER TABLE "UserLocation" ADD COLUMN "coords" geography(Point, 4326);
+CREATE INDEX "location_idx" ON "UserLocation" USING GIST ("coords");

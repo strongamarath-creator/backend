@@ -1,0 +1,107 @@
+Этот файл демонстрирует, как реализовать поиск ближайших пользователей, используя координаты и PostGIS функции прямо внутри Prisma через $queryRaw
+
+
+import { PrismaClient, User } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+interface UserLocation {
+  userId: number;
+  latitude: number;
+  longitude: number;
+}
+
+interface SearchParams {
+  currentUserId: number;
+  latitude: number;
+  longitude: number;
+  radiusKm: number; // Берем из user.searchRadius или ползунка
+  limit?: number;
+  offset?: number;
+  genderPreference?: 'MALE' | 'FEMALE';
+}
+
+/**
+ * 2) Система определения расстояния.
+ * Использует SQL формулу Haversine или PostGIS ST_DistanceSphere для точного расчета.
+ */
+export async function findNearbyUsers(params: SearchParams) {
+  const { currentUserId, latitude, longitude, radiusKm, limit = 20, offset = 0 } = params;
+
+  // Если radiusKm очень большой (например > 10000), считаем это режимом "Весь мир"
+  const isGlobal = radiusKm > 10000; 
+
+  // SQL запрос через Prisma queryRaw
+  // Мы вычисляем distance_meters "на лету"
+  const users = await prisma.$queryRaw`
+    SELECT 
+      u.id, 
+      u."first_name", 
+      u."last_name", 
+      u.image, 
+      u."birthDate",
+      u.latitude,
+      u.longitude,
+      -- Вычисляем расстояние в метрах (6371000 - радиус Земли)
+      (
+        6371000 * acos(
+          cos(radians(${latitude})) * cos(radians(u.latitude)) *
+          cos(radians(u.longitude) - radians(${longitude})) +
+          sin(radians(${latitude})) * sin(radians(u.latitude))
+        )
+      ) / 1000 as distance_km -- Конвертируем в км
+    FROM "users" u
+    WHERE 
+      u.id != ${currentUserId} -- Исключаем самого себя
+      AND u.latitude IS NOT NULL 
+      AND u.longitude IS NOT NULL
+      -- Исключаем тех, кого уже лайкнули/дизлайкнули (важно для дейтинга)
+      AND u.id NOT IN (
+        SELECT "toUserId" FROM "Swipe" WHERE "fromUserId" = ${currentUserId}
+      )
+      -- Фильтр по расстоянию (если не глобальный поиск)
+      ${isGlobal ? Prisma.sql`` : Prisma.sql`AND (
+        6371000 * acos(
+          cos(radians(${latitude})) * cos(radians(u.latitude)) *
+          cos(radians(u.longitude) - radians(${longitude})) +
+          sin(radians(${latitude})) * sin(radians(u.latitude))
+        )
+      ) <= ${radiusKm * 1000}`} -- сравнение в метрах
+    
+    ORDER BY distance_km ASC -- Сначала ближайшие
+    LIMIT ${limit}
+    OFFSET ${offset};
+  `;
+
+  return users;
+}
+
+/**
+ * 3) Системы определения координат (Backend часть)
+ */
+export async function updateUserLocation(userId: number, ip: string, deviceCoords?: {lat: number, lng: number}) {
+  let lat = deviceCoords?.lat;
+  let lng = deviceCoords?.lng;
+
+  // Если координат от устройства нет (например, десктоп), определяем по IP
+  if (!lat || !lng) {
+    // Здесь используем сервис типа MaxMind, ipapi.co и т.д.
+    // Примерный псевдокод:
+    // const geoData = await fetch(`https://ipapi.co/${ip}/json/`).then(r => r.json());
+    // lat = geoData.latitude;
+    // lng = geoData.longitude;
+    
+    // Заглушка:
+    console.log("Определяем город по IP:", ip);
+  }
+
+  if (lat && lng) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        latitude: lat,
+        longitude: lng
+      }
+    });
+  }
+}
