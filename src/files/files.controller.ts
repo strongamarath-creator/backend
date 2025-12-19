@@ -91,36 +91,20 @@ export class FilesController {
     const fileUrl = `/uploads/${userId}/${file.filename}`;
 
     // NOTE: Prisma + SQLite hack for arrays
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { photos: true },
+    });
     if (!user) throw new NotFoundException("User not found");
 
     if (mimeType.startsWith("image/")) {
-      const photos = user.photos || [];
-      photos.push(fileUrl);
-
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { photos: photos },
-      });
-
       // Also persist into normalized UserPhoto table
       try {
-        const order = photos.length - 1;
+        const order = user.photos.length;
         const shouldBeAvatar = !user.avatarUrl && order === 0;
 
-        await this.prisma.userPhoto.upsert({
-          where: {
-            userId_url: {
-              userId,
-              url: fileUrl,
-            },
-          },
-          update: {
-            isActive: true,
-            order,
-            visibility: "PUBLIC",
-          },
-          create: {
+        await this.prisma.userPhoto.create({
+          data: {
             userId,
             url: fileUrl,
             order,
@@ -141,12 +125,14 @@ export class FilesController {
         // If prisma schema/migration is not deployed yet, do not break upload
       }
     } else if (mimeType.startsWith("video/")) {
-      const videos = user.videos || [];
-      videos.push(fileUrl);
-
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { videos: videos },
+      await this.prisma.userMedia.create({
+        data: {
+          userId,
+          url: fileUrl,
+          type: "VIDEO",
+          visibility: "PUBLIC",
+          moderationStatus: "APPROVED",
+        },
       });
     }
 
@@ -326,9 +312,16 @@ export class FilesController {
     }
 
     // Also check if it is in the photos array
-    const photos = user.photos || [];
+    const photo = await this.prisma.userPhoto.findUnique({
+      where: {
+        userId_url: {
+          userId,
+          url: photoUrl,
+        },
+      },
+    });
 
-    if (!photos.includes(photoUrl)) {
+    if (!photo) {
       throw new ForbiddenException("Photo is not in your list");
     }
 

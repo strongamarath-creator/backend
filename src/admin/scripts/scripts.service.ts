@@ -633,19 +633,19 @@ export class ScriptsService {
     await ensure("maintenance_mode", {
       value: "false",
       description: "Enable maintenance mode to block user access",
-      type: ConfigType.boolean,
+      type: ConfigType.BOOLEAN,
     });
 
     await ensure("enable_calls", {
       value: "true",
       description: "Enable Audio/Video Calls",
-      type: ConfigType.boolean,
+      type: ConfigType.BOOLEAN,
     });
 
     await ensure("PHOTO_ACCESS_MODE", {
       value: "RESTRICTED",
       description: "Controls photo access rules (PUBLIC or RESTRICTED).",
-      type: ConfigType.string,
+      type: ConfigType.STRING,
     });
 
     return {

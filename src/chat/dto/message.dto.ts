@@ -23,9 +23,6 @@ export class MessageDto {
   @ApiProperty({ type: String })
   createdAt: Date;
 
-  @ApiProperty({ type: String })
-  updatedAt: Date;
-
   @ApiProperty({ type: () => ChatUserDto })
   sender: ChatUserDto;
 

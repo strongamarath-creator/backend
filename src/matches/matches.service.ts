@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { CreateSwipeDto } from "./dto/create-swipe.dto";
 import { PrismaService } from "../prisma/prisma.service";
 import { SystemService } from "../system/system.service";
-import { Prisma, User } from "@prisma/client";
+import { Prisma, User, SwipeType, UserPhoto, Interest } from "@prisma/client";
 import { ChatGateway } from "../chat/chat.gateway";
 
 const matchUserSelect = {
@@ -77,12 +77,13 @@ export class MatchesService {
     }
 
     // Record the swipe
+    const swipeType: SwipeType = (type as SwipeType) || (isLike ? SwipeType.LIKE : SwipeType.DISLIKE);
     await this.prisma.swipe.create({
       data: {
         fromUserId: fromId,
         toUserId: toId,
         isLike,
-        type: type || (isLike ? "LIKE" : "DISLIKE"),
+        type: swipeType,
         targetPhotoUrl,
         targetPhotoId: resolvedTargetPhotoId,
         context,
@@ -97,7 +98,7 @@ export class MatchesService {
       this.chatGateway.emitToUser(toId, "photoLiked", {
         fromUserId: fromId,
         targetPhotoUrl: targetPhotoUrl ?? null,
-        swipeType: type || "LIKE",
+        swipeType: swipeType,
       });
 
       // Check for mutual like
@@ -280,7 +281,9 @@ export class MatchesService {
     });
   }
 
-  private transformUser(user: Partial<User>) {
+  private transformUser(
+    user: Partial<User> & { photos?: UserPhoto[]; interests?: Interest[] },
+  ) {
     if (!user) return null;
     // Calc age
     const age = user.birthDate
@@ -291,7 +294,8 @@ export class MatchesService {
       : 0;
 
     // Handle photos
-    const photos = user.photos || [];
+    const photos = user.photos ? user.photos.map((p) => p.url) : [];
+    const interests = user.interests ? user.interests.map((i) => i.name) : [];
 
     // Return a safe/public shape (avoid leaking sensitive fields)
     return {
@@ -302,7 +306,7 @@ export class MatchesService {
       photos,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
-      interests: user.interests,
+      interests,
       age,
     };
   }
@@ -411,9 +415,11 @@ export class MatchesService {
         scoreB += 10;
 
       // Interest Overlap (weight: 5 per interest)
-      const interestsA = a.interests || [];
-      const interestsB = b.interests || [];
-      const myInterests = currentUser.interests || [];
+      const interestsA = a.interests ? a.interests.map((i) => i.name) : [];
+      const interestsB = b.interests ? b.interests.map((i) => i.name) : [];
+      const myInterests = currentUser.interests
+        ? currentUser.interests.map((i) => i.name)
+        : [];
 
       const commonA = interestsA.filter((i: string) =>
         myInterests.includes(i),

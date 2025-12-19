@@ -12,6 +12,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { UsersService } from "../users/users.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminGuard } from "../auth/guards/admin.guard";
+import { SubscriptionTier } from "@prisma/client";
 
 @Controller("admin")
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -48,7 +49,7 @@ export class AdminController {
   @Patch("users/:id/subscription")
   async setSubscription(
     @Param("id", ParseIntPipe) id: number,
-    @Body("tier") tier: string,
+    @Body("tier") tier: SubscriptionTier,
   ) {
     return this.prisma.user.update({
       where: { id: id },

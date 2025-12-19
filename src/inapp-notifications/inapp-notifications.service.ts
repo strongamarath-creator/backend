@@ -30,11 +30,12 @@ export class InAppNotificationsService {
   ): Promise<UserNotificationView> {
     return this.prisma.userNotification.create({
       data: {
-        userId,
+        user: { connect: { id: userId } },
+        type: "SYSTEM",
         title: dto.title,
         message: dto.message,
         variant: dto.variant ?? "info",
-        detailsJson: dto.detailsJson,
+        detailsJson: dto.detailsJson ? JSON.parse(JSON.stringify(dto.detailsJson)) : Prisma.JsonNull,
       },
       select: userNotificationSelect,
     });
