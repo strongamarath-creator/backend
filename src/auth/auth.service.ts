@@ -6,6 +6,7 @@ import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { User } from "@prisma/client";
 import { NotificationService } from "../notifications/notification.service";
+import { randomInt } from "crypto";
 
 @Injectable()
 export class AuthService {
@@ -59,15 +60,17 @@ export class AuthService {
       user = await this.usersService.findByPhone(identifier);
     }
 
+    // Fix Username Enumeration: Generic error message
+    // We still log the specific reason internally for debugging/audit
     if (!user) {
       console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
       console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
@@ -89,7 +92,8 @@ export class AuthService {
       return { message: "If account exists, recovery code sent." };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Secure PRNG
+    const code = randomInt(100000, 1000000).toString();
 
     if (isEmail) {
       await this.notificationService.sendEmail(
