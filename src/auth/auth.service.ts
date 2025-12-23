@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { UsersService } from "../users/users.service";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
+import * as crypto from "crypto";
 import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { User } from "@prisma/client";
@@ -89,7 +90,8 @@ export class AuthService {
       return { message: "If account exists, recovery code sent." };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Use crypto.randomInt for secure random number generation
+    const code = crypto.randomInt(100000, 1000000).toString();
 
     if (isEmail) {
       await this.notificationService.sendEmail(
