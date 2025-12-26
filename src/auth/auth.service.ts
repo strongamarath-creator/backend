@@ -61,13 +61,13 @@ export class AuthService {
 
     if (!user) {
       console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
       console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
