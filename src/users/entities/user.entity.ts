@@ -18,7 +18,7 @@ export class User {
   updatedAt: Date;
   lastLoginAt: Date | null;
   lastActiveAt: Date | null;
-  
+
   bio: string | null;
   avatarUrl: string | null;
   height: number | null;
@@ -39,7 +39,7 @@ export class User {
   // Geo & Search
   latitude: number | null;
   longitude: number | null;
-  
+
   searchRadius: number;
   isGlobalSearch: boolean;
   ageMinPreference: number;
