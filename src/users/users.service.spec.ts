@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { UsersService } from "./users.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { User, Prisma } from "@prisma/client";
+import { User, Prisma, VerificationStatus } from "@prisma/client";
 
 // Define the shape of the mock service with explicit Jest mock types
 interface MockPrismaClient {
@@ -50,8 +50,14 @@ describe("UsersService", () => {
     mockPrismaService.user.create.mockResolvedValue({
       id: 1,
       ...createUserDto,
+      emailVerified: null,
       phoneNumber: null,
+      phoneVerified: null,
+      verificationStatus: VerificationStatus.UNVERIFIED,
+      image: null,
+      patronymic: null,
       nationality: null,
+      language: "ru",
       birthDate: new Date(createUserDto.birthDate),
       password: "hashedpassword",
       createdAt: new Date(),
@@ -60,9 +66,9 @@ describe("UsersService", () => {
       latitude: null,
       longitude: null,
       lastLoginAt: null,
+      lastActiveAt: null,
       bio: null,
-      photos: [],
-      interests: [],
+      avatarUrl: null,
       height: null,
       education: null,
       jobTitle: null,
@@ -70,9 +76,21 @@ describe("UsersService", () => {
       smoking: null,
       drinking: null,
       zodiac: null,
-      lookingFor: null,
-      genderPreference: null,
-    });
+      genderPreference: "FEMALE", // Assuming default or mocking specific value
+      isBanned: false,
+      messagingBlocked: false,
+      callEnabled: false,
+      searchRadius: 50,
+      isGlobalSearch: false,
+      ageMinPreference: 18,
+      ageMaxPreference: 99,
+      isPassportActive: false,
+      passportLat: null,
+      passportLon: null,
+      subscriptionTier: "FREE",
+      subscriptionStartedAt: null,
+      subscriptionExpiresAt: null,
+    } as unknown as User); // Using 'as unknown as User' to bypass strict type check for now if relations like photos are missing in the return type but logic only needs simple fields
 
     await service.create(createUserDto);
 
