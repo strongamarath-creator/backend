@@ -8,6 +8,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   HttpException,
+  Logger,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -30,6 +31,8 @@ import { AuthRegisterResponseDto } from "./dto/auth-register-response.dto";
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
@@ -40,21 +43,21 @@ export class AuthController {
   @ApiCreatedResponse({ type: AuthTokenDto })
   async login(@Body() loginDto: LoginDto): Promise<AuthTokenDto> {
     try {
-      console.log("Login attempt for:", loginDto.email);
       return await this.authService.login(loginDto);
     } catch (error: unknown) {
-      console.error("Login error in controller:", error);
+      const errorMessage =
+        error instanceof Error ? error.stack : JSON.stringify(error);
+      this.logger.error("Login failed", errorMessage);
 
       if (error instanceof HttpException) {
         if (error.getStatus() === 401) throw error;
-        throw new InternalServerErrorException(error.message);
+        // Don't leak internal error messages
+        throw new InternalServerErrorException(
+          "An error occurred during login",
+        );
       }
 
-      if (error instanceof Error) {
-        throw new InternalServerErrorException(error.message);
-      }
-
-      throw new InternalServerErrorException("Unexpected error");
+      throw new InternalServerErrorException("An error occurred during login");
     }
   }
 
@@ -84,7 +87,9 @@ export class AuthController {
           : null,
       } as unknown as AuthRegisterResponseDto;
     } catch (error: unknown) {
-      console.error("Register error in controller:", error);
+      const errorMessage =
+        error instanceof Error ? error.stack : JSON.stringify(error);
+      this.logger.error("Register failed", errorMessage);
 
       if (error instanceof HttpException) {
         throw new InternalServerErrorException(error.message);

@@ -12,7 +12,7 @@ const userSafeSelect = {
   phoneNumber: true,
   phoneVerified: true,
   verificationStatus: true,
-  
+
   firstName: true,
   lastName: true,
   patronymic: true,
@@ -20,20 +20,20 @@ const userSafeSelect = {
   gender: true,
   nationality: true,
   language: true,
-  
+
   latitude: true,
   longitude: true,
-  
+
   role: true,
   isBanned: true,
   messagingBlocked: true,
   callEnabled: true,
-  
+
   createdAt: true,
   updatedAt: true,
   lastLoginAt: true,
   lastActiveAt: true,
-  
+
   bio: true,
   avatarUrl: true,
   height: true,
@@ -43,23 +43,23 @@ const userSafeSelect = {
   smoking: true,
   drinking: true,
   zodiac: true,
-  
+
   lookingFor: true,
   genderPreference: true,
-  
-  interests: { select: { name: true } }, 
+
+  interests: { select: { name: true } },
   photos: true,
   media: true,
-  
+
   searchRadius: true,
   isGlobalSearch: true,
   ageMinPreference: true,
   ageMaxPreference: true,
-  
+
   isPassportActive: true,
   passportLat: true,
   passportLon: true,
-  
+
   subscriptionTier: true,
   subscriptionExpiresAt: true,
 } satisfies Prisma.UserSelect;
@@ -110,7 +110,7 @@ export class UsersService {
       phoneNumber: phoneNumber || null,
       nationality,
       language: language || "ru",
-      
+
       bio,
       height,
       education,
@@ -121,15 +121,17 @@ export class UsersService {
       zodiac,
       genderPreference: genderPreference as Gender,
       lookingFor: lookingFor as LookingFor[],
-      
+
       role: "USER",
-      
-      interests: interests?.length ? {
-        connectOrCreate: interests.map((name) => ({
-          where: { name },
-          create: { name },
-        }))
-      } : undefined,
+
+      interests: interests?.length
+        ? {
+            connectOrCreate: interests.map((name) => ({
+              where: { name },
+              create: { name },
+            })),
+          }
+        : undefined,
     };
 
     return this.prisma.user.create({
@@ -186,14 +188,20 @@ export class UsersService {
   update(id: number, updateUserDto: UpdateUserDto) {
     const data: Prisma.UserUpdateInput = {};
 
-    if (updateUserDto.firstName !== undefined) data.firstName = updateUserDto.firstName;
-    if (updateUserDto.lastName !== undefined) data.lastName = updateUserDto.lastName;
-    if (updateUserDto.patronymic !== undefined) data.patronymic = updateUserDto.patronymic;
+    if (updateUserDto.firstName !== undefined)
+      data.firstName = updateUserDto.firstName;
+    if (updateUserDto.lastName !== undefined)
+      data.lastName = updateUserDto.lastName;
+    if (updateUserDto.patronymic !== undefined)
+      data.patronymic = updateUserDto.patronymic;
     if (updateUserDto.email !== undefined) data.email = updateUserDto.email;
-    if (updateUserDto.phoneNumber !== undefined) data.phoneNumber = updateUserDto.phoneNumber;
-    if (updateUserDto.language !== undefined) data.language = updateUserDto.language;
-    if (updateUserDto.nationality !== undefined) data.nationality = updateUserDto.nationality;
-    
+    if (updateUserDto.phoneNumber !== undefined)
+      data.phoneNumber = updateUserDto.phoneNumber;
+    if (updateUserDto.language !== undefined)
+      data.language = updateUserDto.language;
+    if (updateUserDto.nationality !== undefined)
+      data.nationality = updateUserDto.nationality;
+
     if (updateUserDto.birthDate) {
       data.birthDate = new Date(updateUserDto.birthDate);
     }
@@ -201,35 +209,51 @@ export class UsersService {
 
     if (updateUserDto.bio !== undefined) data.bio = updateUserDto.bio;
     if (updateUserDto.height !== undefined) data.height = updateUserDto.height;
-    if (updateUserDto.education !== undefined) data.education = updateUserDto.education;
-    if (updateUserDto.jobTitle !== undefined) data.jobTitle = updateUserDto.jobTitle;
-    if (updateUserDto.company !== undefined) data.company = updateUserDto.company;
-    if (updateUserDto.smoking !== undefined) data.smoking = updateUserDto.smoking;
-    if (updateUserDto.drinking !== undefined) data.drinking = updateUserDto.drinking;
+    if (updateUserDto.education !== undefined)
+      data.education = updateUserDto.education;
+    if (updateUserDto.jobTitle !== undefined)
+      data.jobTitle = updateUserDto.jobTitle;
+    if (updateUserDto.company !== undefined)
+      data.company = updateUserDto.company;
+    if (updateUserDto.smoking !== undefined)
+      data.smoking = updateUserDto.smoking;
+    if (updateUserDto.drinking !== undefined)
+      data.drinking = updateUserDto.drinking;
     if (updateUserDto.zodiac !== undefined) data.zodiac = updateUserDto.zodiac;
-    if (updateUserDto.genderPreference !== undefined) data.genderPreference = updateUserDto.genderPreference as Gender;
-    if (updateUserDto.lookingFor !== undefined) data.lookingFor = updateUserDto.lookingFor as LookingFor[];
+    if (updateUserDto.genderPreference !== undefined)
+      data.genderPreference = updateUserDto.genderPreference as Gender;
+    if (updateUserDto.lookingFor !== undefined)
+      data.lookingFor = updateUserDto.lookingFor as LookingFor[];
 
-    if (updateUserDto.latitude !== undefined) data.latitude = updateUserDto.latitude;
-    if (updateUserDto.longitude !== undefined) data.longitude = updateUserDto.longitude;
-    
-    if (updateUserDto.searchRadius !== undefined) data.searchRadius = updateUserDto.searchRadius;
-    if (updateUserDto.isGlobalSearch !== undefined) data.isGlobalSearch = updateUserDto.isGlobalSearch;
-    if (updateUserDto.ageMinPreference !== undefined) data.ageMinPreference = updateUserDto.ageMinPreference;
-    if (updateUserDto.ageMaxPreference !== undefined) data.ageMaxPreference = updateUserDto.ageMaxPreference;
-    
-    if (updateUserDto.isPassportActive !== undefined) data.isPassportActive = updateUserDto.isPassportActive;
-    if (updateUserDto.passportLat !== undefined) data.passportLat = updateUserDto.passportLat;
-    if (updateUserDto.passportLon !== undefined) data.passportLon = updateUserDto.passportLon;
+    if (updateUserDto.latitude !== undefined)
+      data.latitude = updateUserDto.latitude;
+    if (updateUserDto.longitude !== undefined)
+      data.longitude = updateUserDto.longitude;
+
+    if (updateUserDto.searchRadius !== undefined)
+      data.searchRadius = updateUserDto.searchRadius;
+    if (updateUserDto.isGlobalSearch !== undefined)
+      data.isGlobalSearch = updateUserDto.isGlobalSearch;
+    if (updateUserDto.ageMinPreference !== undefined)
+      data.ageMinPreference = updateUserDto.ageMinPreference;
+    if (updateUserDto.ageMaxPreference !== undefined)
+      data.ageMaxPreference = updateUserDto.ageMaxPreference;
+
+    if (updateUserDto.isPassportActive !== undefined)
+      data.isPassportActive = updateUserDto.isPassportActive;
+    if (updateUserDto.passportLat !== undefined)
+      data.passportLat = updateUserDto.passportLat;
+    if (updateUserDto.passportLon !== undefined)
+      data.passportLon = updateUserDto.passportLon;
 
     if (updateUserDto.interests) {
-        data.interests = {
-            set: [], 
-            connectOrCreate: updateUserDto.interests.map((name) => ({
-                where: { name },
-                create: { name },
-            }))
-        };
+      data.interests = {
+        set: [],
+        connectOrCreate: updateUserDto.interests.map((name) => ({
+          where: { name },
+          create: { name },
+        })),
+      };
     }
 
     if (updateUserDto.photos) {
@@ -286,10 +310,7 @@ export class UsersService {
             ),
           );
 
-          if (
-            updated.avatarUrl &&
-            !newUrls.includes(updated.avatarUrl)
-          ) {
+          if (updated.avatarUrl && !newUrls.includes(updated.avatarUrl)) {
             await tx.userPhoto.updateMany({
               where: { userId: id },
               data: { isAvatar: false },
