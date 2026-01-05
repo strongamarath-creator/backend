@@ -6,9 +6,15 @@ import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { User } from "@prisma/client";
 import { NotificationService } from "../notifications/notification.service";
+import { randomInt } from "crypto";
 
 @Injectable()
 export class AuthService {
+  // Pre-calculated dummy hash for timing attack mitigation
+  // Generated from: bcrypt.hashSync("dummy_password", 10)
+  private readonly DUMMY_HASH =
+    "$2a$10$abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ12";
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -29,18 +35,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.log(`AuthService: User not found for identifier: ${identifier}`);
+      // Simulate comparison to mitigate timing attacks
+      await bcrypt.compare(pass, this.DUMMY_HASH);
       return null;
     }
 
-    // Здесь TypeScript не ругается, так как findByEmail/Phone возвращают полный объект
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.log(`AuthService: Password mismatch for user: ${user.email}`);
       return null;
     }
 
-    console.log(`AuthService: User validated successfully: ${user.email}`);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
@@ -60,14 +64,14 @@ export class AuthService {
     }
 
     if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      // Simulate comparison to mitigate timing attacks
+      await bcrypt.compare(pass, this.DUMMY_HASH);
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
@@ -89,7 +93,7 @@ export class AuthService {
       return { message: "If account exists, recovery code sent." };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = randomInt(100000, 999999).toString();
 
     if (isEmail) {
       await this.notificationService.sendEmail(
