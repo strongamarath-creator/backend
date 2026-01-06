@@ -24,7 +24,7 @@ export class UserProfileDto {
 
   @ApiProperty()
   gender: string;
-  
+
   @ApiProperty()
   language: string;
 
@@ -90,7 +90,7 @@ export class UserProfileDto {
 
   @ApiPropertyOptional({ nullable: true })
   genderPreference?: string | null;
-  
+
   @ApiProperty({ type: Boolean })
   isBanned: boolean;
 
@@ -99,7 +99,7 @@ export class UserProfileDto {
 
   @ApiProperty({ type: Boolean })
   callEnabled: boolean;
-  
+
   // Search Preferences
   @ApiProperty()
   searchRadius: number;
@@ -122,14 +122,14 @@ export class UserProfileDto {
 
   @ApiPropertyOptional({ nullable: true, type: Number })
   passportLon?: number | null;
-  
+
   // Subscription
   @ApiProperty()
   subscriptionTier: string;
-  
+
   @ApiPropertyOptional({ nullable: true, type: String, format: "date-time" })
   subscriptionExpiresAt?: string | null;
-  
+
   @ApiProperty()
   verificationStatus: string;
 }
