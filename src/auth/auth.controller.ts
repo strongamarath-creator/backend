@@ -8,6 +8,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   HttpException,
+  Logger,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -15,6 +16,7 @@ import {
   ApiOkResponse,
   ApiTags,
 } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { CreateUserDto } from "../users/dto/create-user.dto";
@@ -30,34 +32,38 @@ import { AuthRegisterResponseDto } from "./dto/auth-register-response.dto";
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
     private readonly entitlementsService: EntitlementsService,
   ) {}
 
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post("login")
   @ApiCreatedResponse({ type: AuthTokenDto })
   async login(@Body() loginDto: LoginDto): Promise<AuthTokenDto> {
     try {
-      console.log("Login attempt for:", loginDto.email);
+      // Security: Do not log PII (email)
+      this.logger.log(`Login attempt initiated`);
       return await this.authService.login(loginDto);
     } catch (error: unknown) {
-      console.error("Login error in controller:", error);
+      this.logger.error("Login error in controller", error);
 
       if (error instanceof HttpException) {
         if (error.getStatus() === 401) throw error;
-        throw new InternalServerErrorException(error.message);
+        // Security: Do not leak internal error details
+        throw new InternalServerErrorException(
+          "An error occurred during login",
+        );
       }
 
-      if (error instanceof Error) {
-        throw new InternalServerErrorException(error.message);
-      }
-
-      throw new InternalServerErrorException("Unexpected error");
+      throw new InternalServerErrorException("An error occurred during login");
     }
   }
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post("register")
   @ApiCreatedResponse({ type: AuthRegisterResponseDto })
   async register(
@@ -84,17 +90,20 @@ export class AuthController {
           : null,
       } as unknown as AuthRegisterResponseDto;
     } catch (error: unknown) {
-      console.error("Register error in controller:", error);
+      this.logger.error("Register error in controller", error);
 
       if (error instanceof HttpException) {
-        throw new InternalServerErrorException(error.message);
+        // Allow Bad Request (400) to pass through for validation errors
+        if (error.getStatus() === 400 || error.getStatus() === 409) throw error;
+        // Security: Do not leak internal error details for 500s
+        throw new InternalServerErrorException(
+          "An error occurred during registration",
+        );
       }
 
-      if (error instanceof Error) {
-        throw new InternalServerErrorException(error.message);
-      }
-
-      throw new InternalServerErrorException("Unexpected error");
+      throw new InternalServerErrorException(
+        "An error occurred during registration",
+      );
     }
   }
 
