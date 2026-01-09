@@ -6,14 +6,21 @@ import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { User } from "@prisma/client";
 import { NotificationService } from "../notifications/notification.service";
+import * as crypto from "crypto";
 
 @Injectable()
 export class AuthService {
+  private dummyHash: string;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private notificationService: NotificationService,
-  ) {}
+  ) {
+    // Pre-calculate a dummy hash to perform constant-time comparison
+    // even when the user is not found, to mitigate timing attacks.
+    this.dummyHash = bcrypt.hashSync("dummyPasswordForTimingMitigation", 10);
+  }
 
   async validateUser(
     identifier: string,
@@ -29,18 +36,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.log(`AuthService: User not found for identifier: ${identifier}`);
+      // Perform dummy comparison to prevent timing attacks
+      await bcrypt.compare(pass, this.dummyHash);
       return null;
     }
 
-    // Здесь TypeScript не ругается, так как findByEmail/Phone возвращают полный объект
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.log(`AuthService: Password mismatch for user: ${user.email}`);
       return null;
     }
 
-    console.log(`AuthService: User validated successfully: ${user.email}`);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
@@ -60,14 +65,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      // Mitigate timing attacks by performing a hash comparison even if user not found
+      await bcrypt.compare(pass, this.dummyHash);
+      // Generic error message to prevent username enumeration
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      // Generic error message
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
@@ -86,10 +93,12 @@ export class AuthService {
     }
 
     if (!user) {
+      // Return same message to prevent enumeration
       return { message: "If account exists, recovery code sent." };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Use crypto.randomInt for cryptographically secure random number generation
+    const code = crypto.randomInt(100000, 1000000).toString();
 
     if (isEmail) {
       await this.notificationService.sendEmail(
@@ -104,7 +113,7 @@ export class AuthService {
       );
     }
 
-    return { message: "Recovery code sent." };
+    return { message: "If account exists, recovery code sent." };
   }
 
   async changePassword(userId: number, changePasswordDto: ChangePasswordDto) {
@@ -114,7 +123,7 @@ export class AuthService {
     const user = await this.usersService.findByIdWithPassword(userId);
 
     if (!user) {
-      throw new UnauthorizedException("User not found");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     // Дополнительная проверка безопасности на случай, если у пользователя в БД нет пароля
@@ -127,7 +136,7 @@ export class AuthService {
       user.password,
     );
     if (!isPasswordValid) {
-      throw new UnauthorizedException("Invalid current password");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
