@@ -61,8 +61,6 @@ describe("UsersService", () => {
       longitude: null,
       lastLoginAt: null,
       bio: null,
-      photos: [],
-      interests: [],
       height: null,
       education: null,
       jobTitle: null,
