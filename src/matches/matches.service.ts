@@ -77,7 +77,8 @@ export class MatchesService {
     }
 
     // Record the swipe
-    const swipeType: SwipeType = (type as SwipeType) || (isLike ? SwipeType.LIKE : SwipeType.DISLIKE);
+    const swipeType: SwipeType =
+      (type as SwipeType) || (isLike ? SwipeType.LIKE : SwipeType.DISLIKE);
     await this.prisma.swipe.create({
       data: {
         fromUserId: fromId,

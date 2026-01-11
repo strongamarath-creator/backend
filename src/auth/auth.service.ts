@@ -29,18 +29,20 @@ export class AuthService {
     }
 
     if (!user) {
-      console.log(`AuthService: User not found for identifier: ${identifier}`);
+      // Dummy compare to mitigate timing attacks
+      await bcrypt.compare(
+        pass,
+        "$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa",
+      );
       return null;
     }
 
     // Здесь TypeScript не ругается, так как findByEmail/Phone возвращают полный объект
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.log(`AuthService: Password mismatch for user: ${user.email}`);
       return null;
     }
 
-    console.log(`AuthService: User validated successfully: ${user.email}`);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
@@ -60,14 +62,17 @@ export class AuthService {
     }
 
     if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      // Dummy compare to mitigate timing attacks
+      await bcrypt.compare(
+        pass,
+        "$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa",
+      );
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };

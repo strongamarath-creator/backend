@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import requestIp from 'request-ip';
-import geoip from 'geoip-lite';
+import { Request, Response } from "express";
+import { PrismaClient } from "@prisma/client";
+import requestIp from "request-ip";
+import geoip from "geoip-lite";
 
 const prisma = new PrismaClient();
 
@@ -18,8 +18,8 @@ export const updateCoordinates = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
 
-    if (!authReq.user || typeof authReq.user.id !== 'number') {
-      return res.status(401).json({ message: 'Unauthorized' });
+    if (!authReq.user || typeof authReq.user.id !== "number") {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     const userId = authReq.user.id;
@@ -28,8 +28,8 @@ export const updateCoordinates = async (req: Request, res: Response) => {
     // FALLBACK: Если координат нет, пробуем определить по IP
     if (!latitude || !longitude) {
       const clientIp = requestIp.getClientIp(req);
-      const geo = geoip.lookup(clientIp || '');
-      
+      const geo = geoip.lookup(clientIp || "");
+
       if (geo && geo.ll) {
         latitude = geo.ll[0];
         longitude = geo.ll[1];
@@ -37,7 +37,9 @@ export const updateCoordinates = async (req: Request, res: Response) => {
     }
 
     if (!latitude || !longitude) {
-      return res.status(400).json({ message: 'Coordinates could not be determined' });
+      return res
+        .status(400)
+        .json({ message: "Coordinates could not be determined" });
     }
 
     // Обновляем координаты в модели User (согласно schema.prisma)
@@ -46,14 +48,14 @@ export const updateCoordinates = async (req: Request, res: Response) => {
       data: {
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
-        updatedAt: new Date(), 
+        updatedAt: new Date(),
       },
     });
 
-    return res.json({ success: true, message: 'Location updated' });
+    return res.json({ success: true, message: "Location updated" });
   } catch (error) {
-    console.error('Update coordinates error:', error);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Update coordinates error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -62,21 +64,21 @@ export const updateSearchSettings = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
 
-    if (!authReq.user || typeof authReq.user.id !== 'number') {
-      return res.status(401).json({ message: 'Unauthorized' });
+    if (!authReq.user || typeof authReq.user.id !== "number") {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     const userId = authReq.user.id;
-    
+
     // Извлекаем поля, соответствующие schema.prisma
-    const { 
-      searchRadius, 
-      isGlobalSearch, 
+    const {
+      searchRadius,
+      isGlobalSearch,
       ageMin, // Маппим на ageMinPreference
       ageMax, // Маппим на ageMaxPreference
       isPassportActive,
       passportLat,
-      passportLon
+      passportLon,
     } = req.body;
 
     const updatedUser = await prisma.user.update({
@@ -84,14 +86,18 @@ export const updateSearchSettings = async (req: Request, res: Response) => {
       data: {
         // Настройки радиуса и глобального поиска
         searchRadius: searchRadius ? parseInt(searchRadius) : undefined,
-        isGlobalSearch: isGlobalSearch !== undefined ? Boolean(isGlobalSearch) : undefined,
-        
+        isGlobalSearch:
+          isGlobalSearch !== undefined ? Boolean(isGlobalSearch) : undefined,
+
         // Возрастные предпочтения
         ageMinPreference: ageMin ? parseInt(ageMin) : undefined,
         ageMaxPreference: ageMax ? parseInt(ageMax) : undefined,
 
         // Настройки Passport Mode (виртуальная локация)
-        isPassportActive: isPassportActive !== undefined ? Boolean(isPassportActive) : undefined,
+        isPassportActive:
+          isPassportActive !== undefined
+            ? Boolean(isPassportActive)
+            : undefined,
         passportLat: passportLat ? parseFloat(passportLat) : undefined,
         passportLon: passportLon ? parseFloat(passportLon) : undefined,
       },
@@ -99,7 +105,7 @@ export const updateSearchSettings = async (req: Request, res: Response) => {
 
     return res.json({ success: true, settings: updatedUser });
   } catch (error) {
-    console.error('Update settings error:', error);
-    return res.status(500).json({ message: 'Error updating settings' });
+    console.error("Update settings error:", error);
+    return res.status(500).json({ message: "Error updating settings" });
   }
 };
