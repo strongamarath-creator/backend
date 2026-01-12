@@ -6,9 +6,14 @@ import { LoginDto } from "./dto/login.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { User } from "@prisma/client";
 import { NotificationService } from "../notifications/notification.service";
+import * as crypto from "crypto";
 
 @Injectable()
 export class AuthService {
+  // Pre-calculated hash for timing attack mitigation
+  private readonly DUMMY_HASH =
+    "$2a$10$z.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1";
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -29,18 +34,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.log(`AuthService: User not found for identifier: ${identifier}`);
+      // Timing attack mitigation
+      await bcrypt.compare(pass, this.DUMMY_HASH);
       return null;
     }
 
-    // Здесь TypeScript не ругается, так как findByEmail/Phone возвращают полный объект
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.log(`AuthService: Password mismatch for user: ${user.email}`);
       return null;
     }
 
-    console.log(`AuthService: User validated successfully: ${user.email}`);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
@@ -60,14 +63,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      // Timing attack mitigation: verify against dummy hash
+      await bcrypt.compare(pass, this.DUMMY_HASH);
+      // Generic error message to prevent user enumeration
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      // Generic error message to prevent user enumeration
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
@@ -89,7 +94,8 @@ export class AuthService {
       return { message: "If account exists, recovery code sent." };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Secure random number generation
+    const code = crypto.randomInt(100000, 999999).toString();
 
     if (isEmail) {
       await this.notificationService.sendEmail(
@@ -108,16 +114,12 @@ export class AuthService {
   }
 
   async changePassword(userId: number, changePasswordDto: ChangePasswordDto) {
-    // ИСПРАВЛЕНИЕ ЗДЕСЬ:
-    // Мы используем findByIdWithPassword вместо findOne.
-    // findOne возвращал объект БЕЗ поля password (из-за select), что вызывало ошибку.
     const user = await this.usersService.findByIdWithPassword(userId);
 
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
 
-    // Дополнительная проверка безопасности на случай, если у пользователя в БД нет пароля
     if (!user.password) {
       throw new UnauthorizedException("User has no password set");
     }
