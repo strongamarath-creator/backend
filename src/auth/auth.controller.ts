@@ -40,18 +40,22 @@ export class AuthController {
   @ApiCreatedResponse({ type: AuthTokenDto })
   async login(@Body() loginDto: LoginDto): Promise<AuthTokenDto> {
     try {
-      console.log("Login attempt for:", loginDto.email);
+      // Security: Do not log email addresses to avoid PII leaks in logs
+      // console.log("Login attempt for:", loginDto.email);
       return await this.authService.login(loginDto);
     } catch (error: unknown) {
-      console.error("Login error in controller:", error);
+      // Security: Do not log sensitive error details
+      // console.error("Login error in controller:", error);
 
       if (error instanceof HttpException) {
         if (error.getStatus() === 401) throw error;
-        throw new InternalServerErrorException(error.message);
+        // Mask internal server errors
+        throw new InternalServerErrorException("Login failed");
       }
 
       if (error instanceof Error) {
-        throw new InternalServerErrorException(error.message);
+        // Mask internal server errors
+        throw new InternalServerErrorException("Login failed");
       }
 
       throw new InternalServerErrorException("Unexpected error");
