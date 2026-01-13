@@ -47,7 +47,7 @@ export class BackupsService {
 
     try {
       if (mode === "local") {
-        await execAsync(`pg_dump "${dbUrl}" > "${filepath}"`);
+        await execAsync(`pg_dump ${this.escapeShell(dbUrl)} > "${filepath}"`);
         return {
           message: "Backup created successfully",
           filename,
@@ -60,9 +60,9 @@ export class BackupsService {
       const containerName = this.getDbContainerName();
       // pg_dump runs inside container, output redirected on host
       await execAsync(
-        `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} pg_dump -U "${this.escapeShell(
+        `docker exec -e PGPASSWORD=${this.escapeShell(password)} ${containerName} pg_dump -U ${this.escapeShell(
           user,
-        )}" -d "${this.escapeShell(database)}" > "${filepath}"`,
+        )} -d ${this.escapeShell(database)} > "${filepath}"`,
       );
       return {
         message: "Backup created successfully",
@@ -142,12 +142,12 @@ export class BackupsService {
 
       if (mode === "local") {
         pre = await execAsync(
-          `psql "${dbUrl}" --set ON_ERROR_STOP=on --command "${preSql}"`,
+          `psql ${this.escapeShell(dbUrl)} --set ON_ERROR_STOP=on --command ${this.escapeShell(preSql)}`,
           { maxBuffer },
         );
 
         restore = await execAsync(
-          `psql "${dbUrl}" --set ON_ERROR_STOP=on --file "${filepath}"`,
+          `psql ${this.escapeShell(dbUrl)} --set ON_ERROR_STOP=on --file "${filepath}"`,
           { maxBuffer },
         );
       } else {
@@ -155,17 +155,17 @@ export class BackupsService {
         const escapedPreSql = this.escapeShell(preSql);
 
         pre = await execAsync(
-          `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} psql -U "${this.escapeShell(
+          `docker exec -e PGPASSWORD=${this.escapeShell(password)} ${containerName} psql -U ${this.escapeShell(
             user,
-          )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --command "${escapedPreSql}"`,
+          )} -d ${this.escapeShell(database)} --set ON_ERROR_STOP=on --command ${escapedPreSql}`,
           { maxBuffer },
         );
 
         // feed file from host into psql inside container
         restore = await execAsync(
-          `docker exec -i -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} psql -U "${this.escapeShell(
+          `docker exec -i -e PGPASSWORD=${this.escapeShell(password)} ${containerName} psql -U ${this.escapeShell(
             user,
-          )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on < "${filepath}"`,
+          )} -d ${this.escapeShell(database)} --set ON_ERROR_STOP=on < "${filepath}"`,
           { maxBuffer },
         );
       }
@@ -222,13 +222,13 @@ export class BackupsService {
       const res =
         psqlDetected.mode === "local"
           ? await execAsync(
-              `psql "${dbUrl}" --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
+              `psql ${this.escapeShell(dbUrl)} --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
               { maxBuffer },
             )
           : await execAsync(
-              `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${this.getDbContainerName()} psql -U "${this.escapeShell(
+              `docker exec -e PGPASSWORD=${this.escapeShell(password)} ${this.getDbContainerName()} psql -U ${this.escapeShell(
                 user,
-              )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
+              )} -d ${this.escapeShell(database)} --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
               { maxBuffer },
             );
       dbCheck = {
@@ -255,13 +255,13 @@ export class BackupsService {
       const res =
         psqlDetected.mode === "local"
           ? await execAsync(
-              `psql "${dbUrl}" --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
+              `psql ${this.escapeShell(dbUrl)} --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
               { maxBuffer },
             )
           : await execAsync(
-              `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${this.getDbContainerName()} psql -U "${this.escapeShell(
+              `docker exec -e PGPASSWORD=${this.escapeShell(password)} ${this.getDbContainerName()} psql -U ${this.escapeShell(
                 user,
-              )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
+              )} -d ${this.escapeShell(database)} --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
               { maxBuffer },
             );
       connectionsInfo = {
@@ -314,8 +314,9 @@ export class BackupsService {
   }
 
   private escapeShell(value: string) {
-    // минимальная экранизация для команд в shell (Linux/macOS). Для Windows docker fallback всё равно обычно запускается из WSL.
-    return String(value).split('"').join('\\"');
+    // Wrap in single quotes, and replace existing single quotes with '\''.
+    // This is the safest way to escape arguments for POSIX shells.
+    return "'" + String(value).replace(/'/g, "'\\''") + "'";
   }
 
   private getDbParams(dbUrl: string): {
