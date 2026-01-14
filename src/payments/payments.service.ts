@@ -62,7 +62,9 @@ export class PaymentsService {
         status: PaymentStatus.PENDING,
         provider: createPaymentDto.provider as PaymentProvider,
         productType: "SUBSCRIPTION",
-        tier: createPaymentDto.tier ? (createPaymentDto.tier as any) : undefined,
+        tier: createPaymentDto.tier
+          ? (createPaymentDto.tier as any)
+          : undefined,
       },
     });
 
@@ -199,9 +201,9 @@ export class PaymentsService {
 
     // Explicitly handle tier casting if present
     const data: Prisma.PaymentUpdateInput = {
-        ...rest,
-        ...(tier ? { tier: tier as any } : {}),
-        ...(provider ? { provider: provider as PaymentProvider } : {})
+      ...rest,
+      ...(tier ? { tier: tier as any } : {}),
+      ...(provider ? { provider: provider as PaymentProvider } : {}),
     };
 
     return this.prisma.payment.update({
