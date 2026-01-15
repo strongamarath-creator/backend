@@ -64,7 +64,8 @@ export class SystemService implements OnModuleInit {
               },
               calls: { audio: false, video: false },
             },
-            SILVER: { // TIER1 в комментариях схемы, но SILVER в Enum
+            SILVER: {
+              // TIER1 в комментариях схемы, но SILVER в Enum
               messaging: {
                 enabled: true,
                 dailyTextLimit: 0,
@@ -72,7 +73,8 @@ export class SystemService implements OnModuleInit {
               },
               calls: { audio: true, video: false },
             },
-            GOLD: { // TIER2 -> GOLD
+            GOLD: {
+              // TIER2 -> GOLD
               messaging: {
                 enabled: true,
                 dailyTextLimit: 0,
@@ -80,7 +82,8 @@ export class SystemService implements OnModuleInit {
               },
               calls: { audio: true, video: true },
             },
-            PLATINUM: { // TIER3 -> PLATINUM
+            PLATINUM: {
+              // TIER3 -> PLATINUM
               messaging: {
                 enabled: true,
                 dailyTextLimit: 0,
