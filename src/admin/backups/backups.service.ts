@@ -1,11 +1,8 @@
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { exec } from "child_process";
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import * as util from "util";
-
-const execAsync = util.promisify(exec);
 
 function truncateOutput(value: string, maxLen: number) {
   if (!value) return value;
@@ -23,6 +20,70 @@ export class BackupsService {
     if (!fs.existsSync(this.backupPath)) {
       fs.mkdirSync(this.backupPath);
     }
+  }
+
+  /**
+   * Safe wrapper for child_process.spawn.
+   * Handles stdout/stderr collection and error handling.
+   */
+  private async runSpawn(
+    command: string,
+    args: string[],
+    options: {
+      env?: NodeJS.ProcessEnv;
+      input?: fs.ReadStream | string;
+      output?: fs.WriteStream;
+      maxBuffer?: number; // Ignored for streams, but useful if collecting stdout
+    } = {},
+  ): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      // Merge current process env with provided env
+      const child = spawn(command, args, {
+        env: { ...process.env, ...(options.env || {}) },
+        stdio: ["pipe", "pipe", "pipe"], // We manually pipe below
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      // Handle Input (stdin)
+      if (options.input) {
+        if (typeof options.input === "string") {
+          child.stdin.write(options.input);
+          child.stdin.end();
+        } else {
+          options.input.pipe(child.stdin);
+        }
+      }
+
+      // Handle Output (stdout)
+      if (options.output) {
+        child.stdout.pipe(options.output);
+      } else {
+        child.stdout.on("data", (data) => {
+          stdout += data.toString();
+        });
+      }
+
+      // Handle Errors (stderr)
+      child.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          const msg =
+            stderr.trim() || `Command failed with exit code ${code}`;
+          reject(new Error(msg));
+        }
+      });
+
+      child.on("error", (err) => {
+        reject(err);
+      });
+    });
   }
 
   async createBackup() {
@@ -45,9 +106,13 @@ export class BackupsService {
       );
     }
 
+    const fileStream = fs.createWriteStream(filepath);
+
     try {
       if (mode === "local") {
-        await execAsync(`pg_dump "${dbUrl}" > "${filepath}"`);
+        // Safe: passing dbUrl as argument, not shell string
+        await this.runSpawn("pg_dump", [dbUrl], { output: fileStream });
+
         return {
           message: "Backup created successfully",
           filename,
@@ -58,12 +123,23 @@ export class BackupsService {
 
       // docker mode
       const containerName = this.getDbContainerName();
-      // pg_dump runs inside container, output redirected on host
-      await execAsync(
-        `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} pg_dump -U "${this.escapeShell(
+      // Safe: Using spawn array arguments. No shell escaping needed.
+      await this.runSpawn(
+        "docker",
+        [
+          "exec",
+          "-e",
+          `PGPASSWORD=${password}`,
+          containerName,
+          "pg_dump",
+          "-U",
           user,
-        )}" -d "${this.escapeShell(database)}" > "${filepath}"`,
+          "-d",
+          database,
+        ],
+        { output: fileStream },
       );
+
       return {
         message: "Backup created successfully",
         filename,
@@ -75,6 +151,10 @@ export class BackupsService {
       console.error("Backup failed:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
+      // Clean up empty/partial file on error
+      if (fs.existsSync(filepath)) {
+        fs.unlinkSync(filepath);
+      }
       throw new InternalServerErrorException(
         "Failed to create backup: " + errorMessage,
       );
@@ -93,13 +173,7 @@ export class BackupsService {
   }
 
   async deleteBackup(filename: string) {
-    const safeFilename = path.basename(filename);
-    const filepath = path.join(this.backupPath, safeFilename);
-
-    // Ensure the path is still within backupPath (extra safety)
-    if (!filepath.startsWith(this.backupPath)) {
-      throw new InternalServerErrorException("Invalid filename");
-    }
+    const filepath = this.getBackupPath(filename);
 
     if (fs.existsSync(filepath)) {
       await fs.promises.unlink(filepath);
@@ -125,7 +199,6 @@ export class BackupsService {
       );
     }
 
-    const maxBuffer = 10 * 1024 * 1024;
     try {
       // Drop and recreate public schema to avoid conflicts when restoring plain SQL dumps.
       const preSql =
@@ -141,32 +214,60 @@ export class BackupsService {
       };
 
       if (mode === "local") {
-        pre = await execAsync(
-          `psql "${dbUrl}" --set ON_ERROR_STOP=on --command "${preSql}"`,
-          { maxBuffer },
-        );
+        pre = await this.runSpawn("psql", [
+          dbUrl,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--command",
+          preSql,
+        ]);
 
-        restore = await execAsync(
-          `psql "${dbUrl}" --set ON_ERROR_STOP=on --file "${filepath}"`,
-          { maxBuffer },
-        );
+        restore = await this.runSpawn("psql", [
+          dbUrl,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--file",
+          filepath,
+        ]);
       } else {
         const containerName = this.getDbContainerName();
-        const escapedPreSql = this.escapeShell(preSql);
 
-        pre = await execAsync(
-          `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} psql -U "${this.escapeShell(
-            user,
-          )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --command "${escapedPreSql}"`,
-          { maxBuffer },
-        );
+        // 1. Run Pre-SQL
+        pre = await this.runSpawn("docker", [
+          "exec",
+          "-e",
+          `PGPASSWORD=${password}`,
+          containerName,
+          "psql",
+          "-U",
+          user,
+          "-d",
+          database,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--command",
+          preSql,
+        ]);
 
-        // feed file from host into psql inside container
-        restore = await execAsync(
-          `docker exec -i -e PGPASSWORD="${this.escapeShell(password)}" ${containerName} psql -U "${this.escapeShell(
+        // 2. Restore from file (streaming file content to docker -> psql stdin)
+        const fileStream = fs.createReadStream(filepath);
+        restore = await this.runSpawn(
+          "docker",
+          [
+            "exec",
+            "-i", // Interactive mode needed for stdin piping
+            "-e",
+            `PGPASSWORD=${password}`,
+            containerName,
+            "psql",
+            "-U",
             user,
-          )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on < "${filepath}"`,
-          { maxBuffer },
+            "-d",
+            database,
+            "--set",
+            "ON_ERROR_STOP=on",
+          ],
+          { input: fileStream },
         );
       }
 
@@ -216,21 +317,35 @@ export class BackupsService {
     }
 
     // 2) Check DB connectivity (read-only)
-    const maxBuffer = 10 * 1024 * 1024;
     let dbCheck = { ok: false, stdout: "", stderr: "" };
     try {
-      const res =
-        psqlDetected.mode === "local"
-          ? await execAsync(
-              `psql "${dbUrl}" --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
-              { maxBuffer },
-            )
-          : await execAsync(
-              `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${this.getDbContainerName()} psql -U "${this.escapeShell(
-                user,
-              )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --command "SELECT 1 AS ok;"`,
-              { maxBuffer },
-            );
+      let res;
+      if (psqlDetected.mode === "local") {
+        res = await this.runSpawn("psql", [
+          dbUrl,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--command",
+          "SELECT 1 AS ok;",
+        ]);
+      } else {
+        res = await this.runSpawn("docker", [
+          "exec",
+          "-e",
+          `PGPASSWORD=${password}`,
+          this.getDbContainerName(),
+          "psql",
+          "-U",
+          user,
+          "-d",
+          database,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--command",
+          "SELECT 1 AS ok;",
+        ]);
+      }
+
       dbCheck = {
         ok: true,
         stdout: truncateOutput(res.stdout ?? "", 10_000),
@@ -252,18 +367,35 @@ export class BackupsService {
       stderr: string;
     } | null = null;
     try {
-      const res =
-        psqlDetected.mode === "local"
-          ? await execAsync(
-              `psql "${dbUrl}" --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
-              { maxBuffer },
-            )
-          : await execAsync(
-              `docker exec -e PGPASSWORD="${this.escapeShell(password)}" ${this.getDbContainerName()} psql -U "${this.escapeShell(
-                user,
-              )}" -d "${this.escapeShell(database)}" --set ON_ERROR_STOP=on --tuples-only --command "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;"`,
-              { maxBuffer },
-            );
+      let res;
+      if (psqlDetected.mode === "local") {
+        res = await this.runSpawn("psql", [
+          dbUrl,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--tuples-only",
+          "--command",
+          "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;",
+        ]);
+      } else {
+        res = await this.runSpawn("docker", [
+          "exec",
+          "-e",
+          `PGPASSWORD=${password}`,
+          this.getDbContainerName(),
+          "psql",
+          "-U",
+          user,
+          "-d",
+          database,
+          "--set",
+          "ON_ERROR_STOP=on",
+          "--tuples-only",
+          "--command",
+          "SELECT COUNT(*)::int AS connections FROM pg_stat_activity;",
+        ]);
+      }
+
       connectionsInfo = {
         ok: true,
         stdout: truncateOutput(res.stdout ?? "", 10_000).trim(),
@@ -313,11 +445,6 @@ export class BackupsService {
     return process.env.DB_CONTAINER_NAME || "dating_app_db";
   }
 
-  private escapeShell(value: string) {
-    // минимальная экранизация для команд в shell (Linux/macOS). Для Windows docker fallback всё равно обычно запускается из WSL.
-    return String(value).split('"').join('\\"');
-  }
-
   private getDbParams(dbUrl: string): {
     user: string;
     password: string;
@@ -351,8 +478,8 @@ export class BackupsService {
   private async detectDockerExec(): Promise<{ ok: boolean; message: string }> {
     const containerName = this.getDbContainerName();
     try {
-      await execAsync("docker --version");
-      await execAsync(`docker inspect ${containerName}`);
+      await this.runSpawn("docker", ["--version"]);
+      await this.runSpawn("docker", ["inspect", containerName]);
       return { ok: true, message: containerName };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -365,7 +492,7 @@ export class BackupsService {
     versionOrError: string;
   }> {
     try {
-      const v = await execAsync("psql --version");
+      const v = await this.runSpawn("psql", ["--version"]);
       return {
         mode: "local",
         versionOrError: (v.stdout || v.stderr || "").trim(),
@@ -378,9 +505,12 @@ export class BackupsService {
       }
 
       try {
-        const v = await execAsync(
-          `docker exec ${docker.message} psql --version`,
-        );
+        const v = await this.runSpawn("docker", [
+          "exec",
+          docker.message,
+          "psql",
+          "--version",
+        ]);
         return {
           mode: "docker",
           versionOrError: (v.stdout || v.stderr || "").trim(),
@@ -397,7 +527,7 @@ export class BackupsService {
     versionOrError: string;
   }> {
     try {
-      const v = await execAsync("pg_dump --version");
+      const v = await this.runSpawn("pg_dump", ["--version"]);
       return {
         mode: "local",
         versionOrError: (v.stdout || v.stderr || "").trim(),
@@ -410,9 +540,12 @@ export class BackupsService {
       }
 
       try {
-        const v = await execAsync(
-          `docker exec ${docker.message} pg_dump --version`,
-        );
+        const v = await this.runSpawn("docker", [
+          "exec",
+          docker.message,
+          "pg_dump",
+          "--version",
+        ]);
         return {
           mode: "docker",
           versionOrError: (v.stdout || v.stderr || "").trim(),
