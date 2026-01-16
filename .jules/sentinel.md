@@ -1,0 +1,4 @@
+## 2025-02-12 - Command Injection in BackupsService
+**Vulnerability:** The `BackupsService` was using `child_process.exec` with a weak `escapeShell` method (only escaping double quotes) to construct commands for `pg_dump` and `psql`. This allowed potential command injection if a malicious filename or database URL was processed.
+**Learning:** Manual shell escaping is error-prone and often insufficient. Using `child_process.spawn` with argument arrays completely avoids the need for shell escaping and neutralizes injection attacks by treating all input as data, not code.
+**Prevention:** Always prefer `child_process.spawn` or `execFile` over `exec`. Never concatenate user input into shell commands. If shell features (like redirection `>`) are needed, implement them in Node.js streams instead of relying on the shell.
