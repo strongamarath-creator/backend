@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsArray, IsNumber, IsBoolean, Min, Max } from "class-validator";
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsNumber,
+  IsBoolean,
+  Min,
+  Max,
+} from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class UpdateUserDto {
@@ -119,7 +127,7 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   birthDate?: string;
-  
+
   // Search Preferences
   @ApiProperty({ required: false })
   @IsNumber()
@@ -142,7 +150,7 @@ export class UpdateUserDto {
   @IsOptional()
   @Max(99)
   ageMaxPreference?: number;
-  
+
   // Passport (Virtual Location)
   @ApiProperty({ required: false })
   @IsBoolean()
