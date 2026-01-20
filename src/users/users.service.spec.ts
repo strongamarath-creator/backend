@@ -47,6 +47,7 @@ describe("UsersService", () => {
       gender: "male",
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     mockPrismaService.user.create.mockResolvedValue({
       id: 1,
       ...createUserDto,
@@ -61,8 +62,6 @@ describe("UsersService", () => {
       longitude: null,
       lastLoginAt: null,
       bio: null,
-      photos: [],
-      interests: [],
       height: null,
       education: null,
       jobTitle: null,
@@ -72,7 +71,8 @@ describe("UsersService", () => {
       zodiac: null,
       lookingFor: null,
       genderPreference: null,
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
 
     await service.create(createUserDto);
 
