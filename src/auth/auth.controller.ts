@@ -40,7 +40,6 @@ export class AuthController {
   @ApiCreatedResponse({ type: AuthTokenDto })
   async login(@Body() loginDto: LoginDto): Promise<AuthTokenDto> {
     try {
-      console.log("Login attempt for:", loginDto.email);
       return await this.authService.login(loginDto);
     } catch (error: unknown) {
       console.error("Login error in controller:", error);

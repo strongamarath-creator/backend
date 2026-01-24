@@ -28,13 +28,13 @@ describe("JwtStrategy", () => {
 
   it("should validate and return user payload with role", () => {
     const payload = {
-      sub: "user-id",
+      sub: "123",
       email: "test@example.com",
       role: "admin",
     };
     const result = strategy.validate(payload);
     expect(result).toEqual({
-      userId: "user-id",
+      userId: 123,
       email: "test@example.com",
       role: "admin",
     });
