@@ -27,7 +27,7 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   lastName: string;
-  
+
   @ApiPropertyOptional({ example: "Ivanovich" })
   @IsOptional()
   @IsString()
@@ -91,7 +91,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   drinking?: string;
-  
+
   @ApiPropertyOptional({ example: "Leo" })
   @IsOptional()
   @IsString()
@@ -102,7 +102,7 @@ export class CreateUserDto {
   @IsArray()
   @IsString({ each: true })
   lookingFor?: string[];
-  
+
   @ApiPropertyOptional({ example: "FEMALE" })
   @IsOptional()
   @IsString()
