@@ -72,7 +72,7 @@ describe("UsersService", () => {
       zodiac: null,
       lookingFor: null,
       genderPreference: null,
-    });
+    } as any);
 
     await service.create(createUserDto);
 
