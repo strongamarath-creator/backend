@@ -145,8 +145,24 @@ export class ChatService {
       },
       orderBy: { createdAt: "desc" },
       include: {
-        sender: { select: { id: true, firstName: true, email: true, photos: true, avatarUrl: true } },
-        receiver: { select: { id: true, firstName: true, email: true, photos: true, avatarUrl: true } },
+        sender: {
+          select: {
+            id: true,
+            firstName: true,
+            email: true,
+            photos: true,
+            avatarUrl: true,
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            firstName: true,
+            email: true,
+            photos: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
@@ -168,7 +184,9 @@ export class ChatService {
         },
         receiver: {
           ...msg.receiver,
-          photos: msg.receiver.photos ? msg.receiver.photos.map((p) => p.url) : [],
+          photos: msg.receiver.photos
+            ? msg.receiver.photos.map((p) => p.url)
+            : [],
         },
       };
     });
