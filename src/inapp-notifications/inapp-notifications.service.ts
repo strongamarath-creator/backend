@@ -35,7 +35,9 @@ export class InAppNotificationsService {
         title: dto.title,
         message: dto.message,
         variant: dto.variant ?? "info",
-        detailsJson: dto.detailsJson ? JSON.parse(JSON.stringify(dto.detailsJson)) : Prisma.JsonNull,
+        detailsJson: dto.detailsJson
+          ? JSON.parse(JSON.stringify(dto.detailsJson))
+          : Prisma.JsonNull,
       },
       select: userNotificationSelect,
     });
