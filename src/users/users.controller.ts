@@ -8,23 +8,34 @@ import {
   Delete,
   Query,
   ParseIntPipe,
+  UseGuards,
+  Request,
+  ForbiddenException,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { AdminGuard } from "../auth/guards/admin.guard";
+import { RequestWithUser } from "../common/types";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 
+@ApiTags("users")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller("users")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(AdminGuard)
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
+  @UseGuards(AdminGuard)
   @Get()
   findAll(@Query("page") page?: number, @Query("limit") limit?: number) {
-    // Преобразуем параметры в числа, если они пришли как строки
     const pageNum = page ? Number(page) : 1;
     const limitNum = limit ? Number(limit) : undefined;
 
@@ -38,7 +49,11 @@ export class UsersController {
   }
 
   @Get(":id")
-  findOne(@Param("id", ParseIntPipe) id: number) {
+  findOne(
+    @Param("id", ParseIntPipe) id: number,
+    @Request() req: RequestWithUser,
+  ) {
+    this.checkOwnershipOrAdmin(id, req);
     return this.usersService.findOne(id);
   }
 
@@ -46,12 +61,26 @@ export class UsersController {
   update(
     @Param("id", ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
+    @Request() req: RequestWithUser,
   ) {
+    this.checkOwnershipOrAdmin(id, req);
     return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(":id")
-  remove(@Param("id", ParseIntPipe) id: number) {
+  remove(
+    @Param("id", ParseIntPipe) id: number,
+    @Request() req: RequestWithUser,
+  ) {
+    this.checkOwnershipOrAdmin(id, req);
     return this.usersService.remove(id);
+  }
+
+  private checkOwnershipOrAdmin(targetId: number, req: RequestWithUser) {
+    const user = req.user;
+    const isAdmin = user.role === "ADMIN" || user.role === "admin";
+    if (user.userId !== targetId && !isAdmin) {
+      throw new ForbiddenException("You can only access your own data");
+    }
   }
 }
