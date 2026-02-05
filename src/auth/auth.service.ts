@@ -9,11 +9,17 @@ import { NotificationService } from "../notifications/notification.service";
 
 @Injectable()
 export class AuthService {
+  private dummyHash: string;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private notificationService: NotificationService,
-  ) {}
+  ) {
+    // Pre-calculate a dummy hash for timing attack mitigation
+    // We use a fixed salt rounds (10) to match the likely production setting
+    this.dummyHash = bcrypt.hashSync("sentinel-dummy-password", 10);
+  }
 
   async validateUser(
     identifier: string,
@@ -29,18 +35,17 @@ export class AuthService {
     }
 
     if (!user) {
-      console.log(`AuthService: User not found for identifier: ${identifier}`);
+      // Mitigate timing attacks by simulating a password comparison
+      await bcrypt.compare(pass, this.dummyHash);
       return null;
     }
 
     // Здесь TypeScript не ругается, так как findByEmail/Phone возвращают полный объект
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.log(`AuthService: Password mismatch for user: ${user.email}`);
       return null;
     }
 
-    console.log(`AuthService: User validated successfully: ${user.email}`);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
@@ -60,14 +65,16 @@ export class AuthService {
     }
 
     if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+      // Mitigate timing attacks
+      await bcrypt.compare(pass, this.dummyHash);
+      console.warn("AuthService: Login failed (User not found)");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+      console.warn("AuthService: Login failed (Invalid password)");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
