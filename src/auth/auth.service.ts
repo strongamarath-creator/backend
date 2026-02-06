@@ -9,11 +9,16 @@ import { NotificationService } from "../notifications/notification.service";
 
 @Injectable()
 export class AuthService {
+  private dummyHash: string;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private notificationService: NotificationService,
-  ) {}
+  ) {
+    // Pre-calculate dummy hash for timing attack mitigation
+    this.dummyHash = bcrypt.hashSync("dummyPassword", 10);
+  }
 
   async validateUser(
     identifier: string,
@@ -59,15 +64,17 @@ export class AuthService {
       user = await this.usersService.findByPhone(identifier);
     }
 
-    if (!user) {
-      console.warn(`AuthService: User not found for identifier: ${identifier}`);
-      throw new UnauthorizedException("User not found");
+    // Mitigate timing attacks and user enumeration
+    let userPassword = this.dummyHash;
+    if (user && user.password) {
+      userPassword = user.password;
     }
 
-    const isPasswordValid = await bcrypt.compare(pass, user.password);
-    if (!isPasswordValid) {
-      console.warn(`AuthService: Password mismatch for user: ${user.email}`);
-      throw new UnauthorizedException("Invalid password");
+    const isPasswordValid = await bcrypt.compare(pass, userPassword);
+
+    if (!user || !isPasswordValid) {
+      console.warn(`AuthService: Login failed for identifier: ${identifier}`);
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const payload = { email: user.email, sub: user.id, role: user.role };
